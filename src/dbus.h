@@ -1,5 +1,4 @@
 /*
- *
  *  Wireless PAN (802.15.4) daemon for Linux
  *
  *  Copyright (C) 2017 CESAR. All rights reserved.
@@ -20,32 +19,5 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <ell/ell.h>
-#include "dbus.h"
-
-int main(int argc, char *argv[])
-{
-	if (!l_main_init())
-		return EXIT_FAILURE;
-
-	l_log_set_stderr();
-	l_debug_enable("*");
-	l_info("Wireless PAN daemon version %s", VERSION);
-
-	if (!dbus_init(false)) {
-		l_error("D-Bus init fail");
-		return EXIT_FAILURE;
-	}
-
-	l_main_run();
-
-	dbus_exit();
-
-	l_main_exit();
-
-	return 0;
-}
+bool dbus_init(bool enable_debug);
+void dbus_exit(void);
