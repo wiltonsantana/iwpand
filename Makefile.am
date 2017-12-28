@@ -58,7 +58,8 @@ ell_libell_internal_la_SOURCES = $(ell_sources)
 bin_PROGRAMS = src/iwpand
 
 src_iwpand_SOURCES = src/main.c \
-			src/dbus.h src/dbus.c
+			src/dbus.h src/dbus.c \
+			src/phy.h src/phy.c
 src_iwpand_LDADD = ell/libell-internal.la -ldl
 
 AM_CFLAGS = -fvisibility=hidden

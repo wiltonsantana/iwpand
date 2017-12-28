@@ -25,6 +25,7 @@
 #endif
 
 #include <ell/ell.h>
+#include "phy.h"
 #include "dbus.h"
 
 static struct l_timeout *timeout;
@@ -79,7 +80,11 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	phy_init();
+
 	l_main_run();
+
+	phy_exit();
 
 	dbus_exit();
 
