@@ -19,5 +19,8 @@
  *
  */
 
+struct l_dbus;
+struct l_dbus *dbus_get_bus(void);
+
 bool dbus_init(bool enable_debug);
 void dbus_exit(void);

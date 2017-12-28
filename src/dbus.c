@@ -60,6 +60,11 @@ static void disconnect_callback(void *user_data)
 	l_info("D-Bus disconnected");
 }
 
+struct l_dbus *dbus_get_bus(void)
+{
+	return g_dbus;
+}
+
 bool dbus_init(bool enable_debug)
 {
 	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
