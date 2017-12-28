@@ -1,0 +1,14 @@
+Adapter hierarchy
+================
+
+Service		net.connman.iwpand
+Interface	net.connman.iwpand.Adapter [Experimental]
+Object path	/{wpan0,wpan1,...}
+
+Properties	boolean Powered [readwrite]
+
+			True if the adapter is powered.
+
+		string Name [readonly]
+
+			Contains the name of the adapter.
