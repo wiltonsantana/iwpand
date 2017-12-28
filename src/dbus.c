@@ -30,7 +30,15 @@
 
 #include "dbus.h"
 
+#define IWPAND_DBUS_SERVICE	"net.connman.iwpand"
+
 struct l_dbus *g_dbus = NULL;
+
+struct l_dbus_message *dbus_error_invalid_args(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWPAND_DBUS_SERVICE ".InvalidArgs",
+					"Argument type is wrong");
+}
 
 static void debug(const char *str, void *user_data)
 {
@@ -48,7 +56,7 @@ static void request_name_callback(struct l_dbus *dbus, bool success,
 
 static void ready_callback(void *user_data)
 {
-	l_dbus_name_acquire(g_dbus, "net.connman.iwpand", false, false, true,
+	l_dbus_name_acquire(g_dbus, IWPAND_DBUS_SERVICE, false, false, true,
 						request_name_callback, NULL);
 
 	if (!l_dbus_object_manager_enable(g_dbus))
