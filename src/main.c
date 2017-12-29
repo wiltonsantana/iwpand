@@ -65,11 +65,13 @@ static void nl802154_appeared(void *user_data)
 		return;
 
 	l_debug("nl802154 appeared");
+	phy_init(user_data);
 }
 
 static void nl802154_vanished(void *user_data)
 {
 	l_debug("nl802154 vanished");
+	phy_exit(user_data);
 }
 
 int main(int argc, char *argv[])
@@ -118,13 +120,9 @@ int main(int argc, char *argv[])
 		goto fail_watch;
 	}
 
-	phy_init();
-
 	ret = 0;
 
 	l_main_run();
-
-	phy_exit();
 
 fail_watch:
 	l_genl_family_unref(nl802154);

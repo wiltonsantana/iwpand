@@ -20,6 +20,6 @@
  *
  */
 
-int phy_init(void);
+bool phy_init(struct l_genl_family *nl802154);
 
-void phy_exit(void);
+void phy_exit(struct l_genl_family *nl802154);

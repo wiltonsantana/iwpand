@@ -25,6 +25,7 @@
 #endif
 
 #include <ell/ell.h>
+#include "nl802154.h"
 #include "dbus.h"
 #include "phy.h"
 
@@ -85,8 +86,32 @@ static void setup_phy_interface(struct l_dbus_interface *interface)
 		l_error("Can't add 'Name' property");
 }
 
-int phy_init(void)
+static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 {
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data))
+		l_debug("type: %u len:%u", type, len);
+}
+
+bool phy_init(struct l_genl_family *nl802154)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new(NL802154_CMD_GET_WPAN_PHY);
+	if (!l_genl_family_dump(nl802154, msg, get_wpan_phy_callback,
+						NULL, NULL)) {
+		l_error("Getting all PHY devices failed");
+		return false;
+	}
+
 	if (!l_dbus_register_interface(dbus_get_bus(),
 				       PHY_INTERFACE,
 				       setup_phy_interface,
@@ -109,10 +134,10 @@ int phy_init(void)
 		l_error("'/wpan0': Unable to register %s interface",
 						L_DBUS_INTERFACE_PROPERTIES);
 
-	return 0;
+	return true;
 }
 
-void phy_exit(void)
+void phy_exit(struct l_genl_family *nl802154)
 {
 
 }
