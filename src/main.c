@@ -28,6 +28,8 @@
 #include "phy.h"
 #include "dbus.h"
 
+#define NL802154_GENL_NAME "nl802154"
+
 static struct l_timeout *timeout;
 static bool terminating;
 
@@ -57,10 +59,26 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	}
 }
 
+static void nl802154_appeared(void *user_data)
+{
+	if (terminating)
+		return;
+
+	l_debug("nl802154 appeared");
+}
+
+static void nl802154_vanished(void *user_data)
+{
+	l_debug("nl802154 vanished");
+}
+
 int main(int argc, char *argv[])
 {
+	struct l_genl *genl;
+	struct l_genl_family *nl802154;
 	struct l_signal *sig;
 	sigset_t mask;
+	int ret = EXIT_FAILURE;
 
 	if (!l_main_init())
 		return EXIT_FAILURE;
@@ -77,20 +95,49 @@ int main(int argc, char *argv[])
 
 	if (!dbus_init(false)) {
 		l_error("D-Bus init fail");
-		return EXIT_FAILURE;
+		goto fail_dbus;
+	}
+
+	genl = l_genl_new_default();
+	if (!genl) {
+		l_error("Generic Netlink fail");
+		goto fail_genl;
+	}
+
+	nl802154 = l_genl_family_new(genl, NL802154_GENL_NAME);
+	if (!nl802154) {
+		l_error("Failed to open nl802154 interface");
+		goto fail_nl802154;
+	}
+
+	if (!l_genl_family_set_watches(nl802154,
+				  nl802154_appeared,
+				  nl802154_vanished,
+				  nl802154, NULL)) {
+		l_error("Failed to add NL watch");
+		goto fail_watch;
 	}
 
 	phy_init();
+
+	ret = 0;
 
 	l_main_run();
 
 	phy_exit();
 
+fail_watch:
+	l_genl_family_unref(nl802154);
+
+fail_nl802154:
+	l_genl_unref(genl);
+
+fail_genl:
 	dbus_exit();
 
+fail_dbus:
 	l_signal_remove(sig);
-
 	l_main_exit();
 
-	return 0;
+	return ret;
 }
