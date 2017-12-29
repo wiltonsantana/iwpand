@@ -12,3 +12,7 @@ Properties	boolean Powered [readwrite]
 		string Name [readonly]
 
 			Contains the name of the adapter.
+
+		int8 Channel [readwrite]
+
+			Range 11 to 26 (2.4GHz band)
