@@ -86,6 +86,30 @@ static void setup_phy_interface(struct l_dbus_interface *interface)
 		l_error("Can't add 'Name' property");
 }
 
+static void add_interface(const char *name)
+{
+	char *path = l_strdup_printf("/%s", name);
+
+	l_debug("Adding interface %s", path);
+
+	if (!l_dbus_object_add_interface(dbus_get_bus(),
+					 path,
+					 PHY_INTERFACE,
+					 NULL))
+		l_error("'%s': Unable to register %s interface",
+							path,
+							PHY_INTERFACE);
+
+	if (!l_dbus_object_add_interface(dbus_get_bus(),
+					 path,
+					 L_DBUS_INTERFACE_PROPERTIES,
+					 NULL))
+		l_error("'%s': Unable to register %s interface", path,
+						L_DBUS_INTERFACE_PROPERTIES);
+
+	l_free(path);
+}
+
 static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct l_genl_attr attr;
@@ -97,8 +121,14 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	while (l_genl_attr_next(&attr, &type, &len, &data))
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		l_debug("type: %u len:%u", type, len);
+		switch (type) {
+		case NL802154_ATTR_WPAN_PHY_NAME:
+			add_interface(data);
+			break;
+		}
+	}
 }
 
 bool phy_init(struct l_genl_family *nl802154)
@@ -119,20 +149,6 @@ bool phy_init(struct l_genl_family *nl802154)
 		l_error("Unable to register %s interface", PHY_INTERFACE);
 		return false;
 	}
-
-	if (!l_dbus_object_add_interface(dbus_get_bus(),
-					 "/wpan0",
-					 PHY_INTERFACE,
-					 NULL))
-		l_error("'/wpan0': Unable to register %s interface",
-							PHY_INTERFACE);
-
-	if (!l_dbus_object_add_interface(dbus_get_bus(),
-					 "/wpan0",
-					 L_DBUS_INTERFACE_PROPERTIES,
-					 NULL))
-		l_error("'/wpan0': Unable to register %s interface",
-						L_DBUS_INTERFACE_PROPERTIES);
 
 	return true;
 }
