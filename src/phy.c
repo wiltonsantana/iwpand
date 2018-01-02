@@ -34,6 +34,7 @@
 struct phy {
 	char *name;
 	bool powered;
+	uint8_t channel;
 };
 
 static struct l_queue *phy_list = NULL;
@@ -90,6 +91,19 @@ static bool phy_property_get_name(struct l_dbus *dbus,
 	return true;
 }
 
+static bool phy_property_get_channel(struct l_dbus *dbus,
+				     struct l_dbus_message *msg,
+				     struct l_dbus_message_builder *builder,
+				     void *user_data)
+{
+	struct phy *phy = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 'y', &phy->channel);
+	l_info("GetProperty(Channel = %d)", phy->channel);
+
+	return true;
+}
+
 static void setup_phy_interface(struct l_dbus_interface *interface)
 {
 	if (!l_dbus_interface_property(interface, "Powered", 0, "b",
@@ -101,18 +115,16 @@ static void setup_phy_interface(struct l_dbus_interface *interface)
 				       phy_property_get_name,
 				       NULL))
 		l_error("Can't add 'Name' property");
+
+	if (!l_dbus_interface_property(interface, "Channel", 0, "y",
+				       phy_property_get_channel,
+				       NULL))
+		l_error("Can't add 'Channel' property");
 }
 
-static void add_interface(const char *name)
+static void add_interface(struct phy *phy)
 {
-	struct phy *phy;
-	char *path = l_strdup_printf("/%s", name);
-
-	l_debug("Adding interface %s", path);
-
-	phy = l_new(struct phy, 1);
-	phy->name = l_strdup(name);
-	phy->powered = false;
+	char *path = l_strdup_printf("/%s", phy->name);
 
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 					 path,
@@ -130,12 +142,12 @@ static void add_interface(const char *name)
 						path,
 						L_DBUS_INTERFACE_PROPERTIES);
 
-	l_queue_push_head(phy_list, phy);
 	l_free(path);
 }
 
 static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 {
+	struct phy *phy;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
@@ -145,11 +157,22 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
+	phy = l_new(struct phy, 1);
+	l_queue_push_head(phy_list, phy);
+
+	phy->powered = false;
+
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		l_debug("type: %u len:%u", type, len);
 		switch (type) {
 		case NL802154_ATTR_WPAN_PHY_NAME:
-			add_interface(data);
+			phy->name = l_strdup(data);
+			add_interface(phy);
+			l_debug("  name: %s", phy->name);
+			break;
+		case NL802154_ATTR_CHANNEL:
+			phy->channel = *((uint8_t *) data);
+			l_debug("  channel: %d", phy->channel);
 			break;
 		}
 	}
