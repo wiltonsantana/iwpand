@@ -31,15 +31,30 @@
 
 #define PHY_INTERFACE		"net.connman.iwpand.Adapter"
 
+struct phy {
+	char *name;
+	bool powered;
+};
+
+static struct l_queue *phy_list = NULL;
+
+static void phy_free(void *data)
+{
+	struct phy *phy = data;
+
+	l_free(phy->name);
+	l_free(phy);
+}
+
 static bool phy_property_get_powered(struct l_dbus *dbus,
 				     struct l_dbus_message *msg,
 				     struct l_dbus_message_builder *builder,
 				     void *user_data)
 {
-	bool value = false;
+	struct phy *phy = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 'b', &value);
-	l_info("GetProperty(Powered = %d)", value);
+	l_dbus_message_builder_append_basic(builder, 'b', &phy->powered);
+	l_info("GetProperty(Powered = %d)", phy->powered);
 
 	return true;
 }
@@ -50,12 +65,14 @@ static struct l_dbus_message *phy_property_set_powered(struct l_dbus *dbus,
 					l_dbus_property_complete_cb_t complete,
 					void *user_data)
 {
-        bool value;
+	struct phy *phy = user_data;
+	bool value;
 
 	if (!l_dbus_message_iter_get_variant(new_value, "b", &value))
 		return dbus_error_invalid_args(message);
 
 	l_info("SetProperty(Powered = %d)", value);
+	phy->powered = value;
 
 	return NULL;
 }
@@ -65,10 +82,10 @@ static bool phy_property_get_name(struct l_dbus *dbus,
 				  struct l_dbus_message_builder *builder,
 				  void *user_data)
 {
-	const char value[] = "lowpan0";
+	struct phy *phy = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', value);
-	l_info("GetProperty(Name = %s)", value);
+	l_dbus_message_builder_append_basic(builder, 's', phy->name);
+	l_info("GetProperty(Name = %s)", phy->name);
 
 	return true;
 }
@@ -88,14 +105,19 @@ static void setup_phy_interface(struct l_dbus_interface *interface)
 
 static void add_interface(const char *name)
 {
+	struct phy *phy;
 	char *path = l_strdup_printf("/%s", name);
 
 	l_debug("Adding interface %s", path);
 
+	phy = l_new(struct phy, 1);
+	phy->name = l_strdup(name);
+	phy->powered = false;
+
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 					 path,
 					 PHY_INTERFACE,
-					 NULL))
+					 phy))
 		l_error("'%s': Unable to register %s interface",
 							path,
 							PHY_INTERFACE);
@@ -103,10 +125,12 @@ static void add_interface(const char *name)
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 					 path,
 					 L_DBUS_INTERFACE_PROPERTIES,
-					 NULL))
-		l_error("'%s': Unable to register %s interface", path,
+					 phy))
+		l_error("'%s': Unable to register %s interface",
+						path,
 						L_DBUS_INTERFACE_PROPERTIES);
 
+	l_queue_push_head(phy_list, phy);
 	l_free(path);
 }
 
@@ -150,10 +174,12 @@ bool phy_init(struct l_genl_family *nl802154)
 		return false;
 	}
 
+	phy_list = l_queue_new();
+
 	return true;
 }
 
 void phy_exit(struct l_genl_family *nl802154)
 {
-
+	l_queue_destroy(phy_list, phy_free);
 }
