@@ -32,12 +32,15 @@
 #define PHY_INTERFACE		"net.connman.iwpand.Adapter"
 
 struct phy {
+	uint32_t id;
 	char *name;
 	bool powered;
+	uint8_t page;
 	uint8_t channel;
 };
 
 static struct l_queue *phy_list = NULL;
+static struct l_genl_family *nl802154 = NULL;
 
 static void phy_free(void *data)
 {
@@ -104,6 +107,38 @@ static bool phy_property_get_channel(struct l_dbus *dbus,
 	return true;
 }
 
+static struct l_dbus_message *phy_property_set_channel(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct phy *phy = user_data;
+	struct l_genl_msg *msg;
+	uint8_t value;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "y", &value))
+		return dbus_error_invalid_args(message);
+
+	l_info("SetProperty(Channel = %d)", value);
+
+	msg = l_genl_msg_new_sized(NL802154_CMD_SET_CHANNEL, 64);
+	l_genl_msg_append_attr(msg, NL802154_ATTR_WPAN_PHY,
+			       sizeof(phy->id), &phy->id);
+	l_genl_msg_append_attr(msg, NL802154_ATTR_PAGE, 1, &phy->page);
+	l_genl_msg_append_attr(msg, NL802154_ATTR_CHANNEL, 1, &value);
+
+	if (!l_genl_family_send(nl802154, msg, NULL, NULL, NULL)) {
+		l_error("NL802154_CMD_SET_CHANNEL failed");
+		return dbus_error_invalid_args(message);
+	}
+
+	phy->channel = value;
+	complete(dbus, message, NULL);
+
+	return NULL;
+}
+
 static void setup_phy_interface(struct l_dbus_interface *interface)
 {
 	if (!l_dbus_interface_property(interface, "Powered", 0, "b",
@@ -118,7 +153,7 @@ static void setup_phy_interface(struct l_dbus_interface *interface)
 
 	if (!l_dbus_interface_property(interface, "Channel", 0, "y",
 				       phy_property_get_channel,
-				       NULL))
+				       phy_property_set_channel))
 		l_error("Can't add 'Channel' property");
 }
 
@@ -165,10 +200,18 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		l_debug("type: %u len:%u", type, len);
 		switch (type) {
+		case NL802154_ATTR_WPAN_PHY:
+			phy->id = *((uint32_t *) data);
+			l_debug("  id: %d", phy->id);
+			break;
 		case NL802154_ATTR_WPAN_PHY_NAME:
 			phy->name = l_strdup(data);
 			add_interface(phy);
 			l_debug("  name: %s", phy->name);
+			break;
+		case NL802154_ATTR_PAGE:
+			phy->page = *((uint8_t *) data);
+			l_debug("  page: %d", phy->page);
 			break;
 		case NL802154_ATTR_CHANNEL:
 			phy->channel = *((uint8_t *) data);
@@ -178,12 +221,12 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-bool phy_init(struct l_genl_family *nl802154)
+bool phy_init(struct l_genl_family *genl)
 {
 	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new(NL802154_CMD_GET_WPAN_PHY);
-	if (!l_genl_family_dump(nl802154, msg, get_wpan_phy_callback,
+	if (!l_genl_family_dump(genl, msg, get_wpan_phy_callback,
 						NULL, NULL)) {
 		l_error("Getting all PHY devices failed");
 		return false;
@@ -198,11 +241,12 @@ bool phy_init(struct l_genl_family *nl802154)
 	}
 
 	phy_list = l_queue_new();
+	nl802154 = genl;
 
 	return true;
 }
 
-void phy_exit(struct l_genl_family *nl802154)
+void phy_exit(struct l_genl_family *genl)
 {
 	l_queue_destroy(phy_list, phy_free);
 }
