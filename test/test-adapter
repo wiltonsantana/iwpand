@@ -1,0 +1,60 @@
+#!/usr/bin/python
+from optparse import OptionParser, make_option
+import sys
+import dbus
+
+bus = dbus.SystemBus()
+
+option_list = [ make_option("-p", "--path", action="store", type="string", dest="path"), ]
+parser = OptionParser(option_list=option_list)
+
+(options, args) = parser.parse_args()
+
+if (len(args) < 1):
+        print("Usage: %s <command>" % (sys.argv[0]))
+        print("")
+        print("  info")
+        print("  channel [11-26]")
+        print("  powered [on/off]")
+        sys.exit(1)
+
+cmd = args[0]
+if (options.path):
+	path = options.path
+else:
+	path = "/phy0"
+
+props = dbus.Interface(bus.get_object("net.connman.iwpand", path), "org.freedesktop.DBus.Properties")
+
+if (cmd == "info"):
+	print (props.GetAll("net.connman.iwpand.Adapter"))
+	sys.exit(0)
+
+if (cmd == "channel"):
+	channel = props.Get("net.connman.iwpand.Adapter", "Channel")
+	if (len(args) < 2):
+		print("  Channel: %d" % channel)
+	else:
+		ch = dbus.Byte(int(args[1]))
+		props.Set("net.connman.iwpand.Adapter", "Channel", ch)
+		new_channel = props.Get("net.connman.iwpand.Adapter", "Channel")
+		print ("  Channel: %d > %d" % (channel, new_channel))
+
+	sys.exit(0)
+
+if (cmd == "powered"):
+	print ("powered ...")
+	powered1 = props.Get("net.connman.iwpand.Adapter", "Powered")
+	if (len(args) < 2):
+		print("  Powered: %d" % powered1)
+	else:
+		if (args[1] == "on"):
+			value = dbus.Boolean(1)
+		else:
+			value = dbus.Boolean(0)
+
+		props.Set("net.connman.iwpand.Adapter", "Powered", value)
+		powered2 = props.Get("net.connman.iwpand.Adapter", "Powered")
+		print ("  Powered: %d > %d" % (powered1, powered2))
+
+	sys.exit(0)
