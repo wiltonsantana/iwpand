@@ -3,7 +3,7 @@ Adapter hierarchy
 
 Service		net.connman.iwpand
 Interface	net.connman.iwpand.Adapter [Experimental]
-Object path	/{wpan0,wpan1,...}
+Object path	/{phy0, phy1,...}
 
 Properties	boolean Powered [readwrite]
 
