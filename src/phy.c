@@ -27,6 +27,7 @@
 #include <ell/ell.h>
 #include "nl802154.h"
 #include "dbus.h"
+#include "lowpan.h"
 #include "phy.h"
 
 #define PHY_INTERFACE		"net.connman.iwpand.Adapter"
@@ -76,7 +77,19 @@ static struct l_dbus_message *phy_property_set_powered(struct l_dbus *dbus,
 		return dbus_error_invalid_args(message);
 
 	l_info("SetProperty(Powered = %d)", value);
+
+	if (value == phy->powered)
+		goto done;
+
 	phy->powered = value;
+
+	if (value == true)
+		lowpan_init();
+	else
+		lowpan_exit();
+
+done:
+	complete(dbus, message, NULL);
 
 	return NULL;
 }

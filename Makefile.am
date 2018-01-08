@@ -59,7 +59,8 @@ bin_PROGRAMS = src/iwpand
 
 src_iwpand_SOURCES = src/main.c \
 			src/dbus.h src/dbus.c \
-			src/phy.h src/phy.c
+			src/phy.h src/phy.c \
+			src/lowpan.h src/lowpan.c
 src_iwpand_LDADD = ell/libell-internal.la -ldl
 
 AM_CFLAGS = -fvisibility=hidden
