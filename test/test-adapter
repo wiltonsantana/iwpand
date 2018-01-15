@@ -14,7 +14,6 @@ if (len(args) < 1):
         print("Usage: %s <command>" % (sys.argv[0]))
         print("")
         print("  info")
-        print("  channel [11-26]")
         print("  powered [on/off]")
         sys.exit(1)
 
@@ -22,7 +21,7 @@ cmd = args[0]
 if (options.path):
 	path = options.path
 else:
-	path = "/phy0"
+	path = "/wpan0"
 
 props = dbus.Interface(bus.get_object("net.connman.iwpand", path), "org.freedesktop.DBus.Properties")
 
@@ -30,15 +29,15 @@ if (cmd == "info"):
 	print (props.GetAll("net.connman.iwpand.Adapter"))
 	sys.exit(0)
 
-if (cmd == "channel"):
-	channel = props.Get("net.connman.iwpand.Adapter", "Channel")
+if (cmd == "panid"):
+	panid = props.Get("net.connman.iwpand.Adapter", "PanId")
 	if (len(args) < 2):
-		print("  Channel: %d" % channel)
+		print("  PanId: %d" % panid)
 	else:
-		ch = dbus.Byte(int(args[1]))
-		props.Set("net.connman.iwpand.Adapter", "Channel", ch)
-		new_channel = props.Get("net.connman.iwpand.Adapter", "Channel")
-		print ("  Channel: %d > %d" % (channel, new_channel))
+		new_panid = dbus.UInt16(int(args[1]))
+		props.Set("net.connman.iwpand.Adapter", "PanId", new_panid)
+		new_panid = props.Get("net.connman.iwpand.Adapter", "PanId")
+		print ("  Channel: %d > %d" % (panid, new_panid))
 
 	sys.exit(0)
 
