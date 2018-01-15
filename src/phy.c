@@ -39,7 +39,7 @@ struct channel {
 };
 
 struct wpan {
-	uint32_t id;
+	uint32_t ifindex;
 	char *name;
 	bool powered;
 	uint16_t panid;
@@ -125,6 +125,38 @@ static bool property_get_panid(struct l_dbus *dbus,
 	return true;
 }
 
+static struct l_dbus_message *property_set_panid(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct wpan *wpan = user_data;
+	struct l_genl_msg *msg;
+	uint16_t value;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "q", &value))
+		return dbus_error_invalid_args(message);
+
+	l_info("SetProperty(PanId = %d)", value);
+
+	msg = l_genl_msg_new_sized(NL802154_CMD_SET_PAN_ID, 64);
+	l_genl_msg_append_attr(msg, NL802154_ATTR_IFINDEX,
+					sizeof(wpan->ifindex), &wpan->ifindex);
+	l_genl_msg_append_attr(msg, NL802154_ATTR_PAN_ID,
+						sizeof(value), &value);
+
+	if (!l_genl_family_send(nl802154, msg, NULL, NULL, NULL)) {
+		l_error("NL802154_CMD_SET_PAN_ID failed");
+		return dbus_error_invalid_args(message);
+	}
+
+	wpan->panid =value;
+	complete(dbus, message, NULL);
+
+	return NULL;
+}
+
 static void register_property(struct l_dbus_interface *interface)
 {
 	if (!l_dbus_interface_property(interface, "Powered", 0, "b",
@@ -139,7 +171,7 @@ static void register_property(struct l_dbus_interface *interface)
 
 	if (!l_dbus_interface_property(interface, "PanId", 0, "q",
 				       property_get_panid,
-				       NULL))
+				       property_set_panid))
 		l_error("Can't add 'PanId' property");
 }
 
@@ -245,9 +277,9 @@ static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		l_debug("type: %u len:%u", type, len);
 		switch (type) {
-		case NL802154_ATTR_WPAN_PHY:
-			wpan->id = *((uint32_t *) data);
-			l_debug("  id: %d",  wpan->id);
+		case NL802154_ATTR_IFINDEX:
+			wpan->ifindex = *((uint32_t *) data);
+			l_debug("  id: %d",  wpan->ifindex);
 			break;
 		case NL802154_ATTR_IFNAME:
 			wpan->name = l_strdup(data);
