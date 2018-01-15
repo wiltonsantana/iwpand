@@ -38,13 +38,6 @@ struct channel {
 	uint8_t ch;
 };
 
-struct phy {
-	uint32_t id;
-	char *name;
-	uint8_t page;
-	uint8_t channel;
-};
-
 struct wpan {
 	uint32_t id;
 	char *name;
@@ -52,17 +45,8 @@ struct wpan {
 	uint16_t panid;
 };
 
-static struct l_queue *phy_list = NULL;
 static struct l_queue *wpan_list = NULL;
 static struct l_genl_family *nl802154 = NULL;
-
-static void phy_free(void *data)
-{
-	struct phy *phy = data;
-
-	l_free(phy->name);
-	l_free(phy);
-}
 
 static void wpan_free(void *data)
 {
@@ -168,39 +152,60 @@ static void add_interface(struct wpan *wpan)
 
 static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 {
-	struct phy *phy;
+	struct channel *channel = user_data;
+	struct l_genl_msg *setup;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
+	uint32_t id;
+	uint8_t page = 0xff;
+	uint8_t ch = 0xff;
 
 	l_debug("");
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	phy = l_new(struct phy, 1);
-	l_queue_push_head(phy_list, phy);
-
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		l_debug("type: %u len:%u", type, len);
 		switch (type) {
 		case NL802154_ATTR_WPAN_PHY:
-			phy->id = *((uint32_t *) data);
-			l_debug("  id: %d", phy->id);
-			break;
-		case NL802154_ATTR_WPAN_PHY_NAME:
-			phy->name = l_strdup(data);
-			l_debug("  name: %s", phy->name);
+			id = *((uint32_t *) data);
+			l_debug("  id: %d", id);
 			break;
 		case NL802154_ATTR_PAGE:
-			phy->page = *((uint8_t *) data);
-			l_debug("  page: %d", phy->page);
+			page = *((uint8_t *) data);
+			l_debug("  page: %d", page);
 			break;
 		case NL802154_ATTR_CHANNEL:
-			phy->channel = *((uint8_t *) data);
-			l_debug("  channel: %d", phy->channel);
+			ch = *((uint8_t *) data);
+			l_debug("  channel: %d", ch);
 			break;
 		}
+	}
+
+	/* Malformed netlink message? */
+	if (page == 0xff || ch == 0xff)
+		return;
+
+	/* Valid command line params? */
+	if (channel->page == 0xff || channel->ch == 0xff)
+		return;
+
+	if (channel->page == page && channel->ch == ch)
+		return;
+
+	/* Change page and channel according to command line params */
+	setup = l_genl_msg_new_sized(NL802154_CMD_SET_CHANNEL, 64);
+	l_genl_msg_append_attr(setup, NL802154_ATTR_WPAN_PHY, sizeof(id), &id);
+	l_genl_msg_append_attr(setup, NL802154_ATTR_PAGE,
+			       sizeof(channel->page), &channel->page);
+	l_genl_msg_append_attr(setup, NL802154_ATTR_CHANNEL,
+			       sizeof(channel->ch), &channel->ch);
+
+	if (!l_genl_family_send(nl802154, setup, NULL, NULL, NULL)) {
+		l_error("NL802154_CMD_SET_CHANNEL failed");
+		return;
 	}
 }
 
@@ -271,7 +276,6 @@ bool phy_init(struct l_genl_family *genl, uint8_t page, uint8_t ch)
 		return false;
 	}
 
-	phy_list = l_queue_new();
 	wpan_list = l_queue_new();
 	nl802154 = genl;
 
@@ -280,6 +284,5 @@ bool phy_init(struct l_genl_family *genl, uint8_t page, uint8_t ch)
 
 void phy_exit(struct l_genl_family *genl)
 {
-	l_queue_destroy(phy_list, phy_free);
 	l_queue_destroy(wpan_list, wpan_free);
 }
