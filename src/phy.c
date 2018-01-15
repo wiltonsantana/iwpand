@@ -112,6 +112,19 @@ static bool property_get_name(struct l_dbus *dbus,
 	return true;
 }
 
+static bool property_get_panid(struct l_dbus *dbus,
+				  struct l_dbus_message *msg,
+				  struct l_dbus_message_builder *builder,
+				  void *user_data)
+{
+	struct wpan *wpan = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 'q', &wpan->panid);
+	l_info("GetProperty(PanId = %d)", wpan->panid);
+
+	return true;
+}
+
 static void register_property(struct l_dbus_interface *interface)
 {
 	if (!l_dbus_interface_property(interface, "Powered", 0, "b",
@@ -123,6 +136,11 @@ static void register_property(struct l_dbus_interface *interface)
 				       property_get_name,
 				       NULL))
 		l_error("Can't add 'Name' property");
+
+	if (!l_dbus_interface_property(interface, "PanId", 0, "q",
+				       property_get_panid,
+				       NULL))
+		l_error("Can't add 'PanId' property");
 }
 
 static void add_interface(struct wpan *wpan)
