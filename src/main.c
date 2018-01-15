@@ -23,6 +23,9 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <getopt.h>
 
 #include <ell/ell.h>
 #include "phy.h"
@@ -32,6 +35,8 @@
 
 static struct l_timeout *timeout;
 static bool terminating;
+static uint8_t channel = 0xff;
+static uint8_t page = 0xff;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 {
@@ -65,7 +70,7 @@ static void nl802154_appeared(void *user_data)
 		return;
 
 	l_debug("nl802154 appeared");
-	phy_init(user_data);
+	phy_init(user_data, page, channel);
 }
 
 static void nl802154_vanished(void *user_data)
@@ -74,6 +79,24 @@ static void nl802154_vanished(void *user_data)
 	phy_exit(user_data);
 }
 
+static void usage(void)
+{
+	printf("iwpand - Wireless PAN daemon\n"
+		"Usage:\n");
+	printf("\tiwpand [options]\n");
+	printf("Options:\n"
+		"\t-c, --channel          Radio channel to use\n"
+		"\t-p, --page		  Radio channel page to use\n"
+		"\t-h, --help             Show help options\n");
+}
+static const struct option main_options[] = {
+	{ "version",		no_argument,       NULL, 'v' },
+	{ "page",		required_argument, NULL, 'p' },
+	{ "channel",		required_argument, NULL, 'c' },
+	{ "help",		no_argument,       NULL, 'h' },
+	{ }
+};
+
 int main(int argc, char *argv[])
 {
 	struct l_genl *genl;
@@ -81,6 +104,32 @@ int main(int argc, char *argv[])
 	struct l_signal *sig;
 	sigset_t mask;
 	int ret = EXIT_FAILURE;
+	int opt;
+
+	for (;;) {
+		opt = getopt_long(argc, argv, "c:p:", main_options, NULL);
+		if (opt < 0)
+			break;
+
+		switch (opt) {
+		case 'c':
+			channel = atoi(optarg);
+			break;
+		case 'p':
+			page = atoi(optarg);
+			break;
+		case 'h':
+			usage();
+			return EXIT_SUCCESS;
+		default:
+			return EXIT_FAILURE;
+		}
+	}
+
+	if (argc - optind > 0) {
+		fprintf(stderr, "Invalid command line parameters\n");
+		return EXIT_FAILURE;
+	}
 
 	if (!l_main_init())
 		return EXIT_FAILURE;

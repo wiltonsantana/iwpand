@@ -20,6 +20,6 @@
  *
  */
 
-bool phy_init(struct l_genl_family *genl);
+bool phy_init(struct l_genl_family *genl, uint8_t page, uint8_t ch);
 
 void phy_exit(struct l_genl_family *genl);

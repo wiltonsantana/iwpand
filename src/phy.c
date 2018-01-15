@@ -32,6 +32,12 @@
 
 #define PHY_INTERFACE		"net.connman.iwpand.Adapter"
 
+/* User defined settings */
+struct channel {
+	uint8_t page;
+	uint8_t ch;
+};
+
 struct phy {
 	uint32_t id;
 	char *name;
@@ -234,13 +240,18 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-bool phy_init(struct l_genl_family *genl)
+bool phy_init(struct l_genl_family *genl, uint8_t page, uint8_t ch)
 {
 	struct l_genl_msg *msg;
+	struct channel *channel;
+
+	channel = l_new(struct channel, 1);
+	channel->page = page;
+	channel->ch = ch;
 
 	msg = l_genl_msg_new(NL802154_CMD_GET_WPAN_PHY);
 	if (!l_genl_family_dump(genl, msg, get_wpan_phy_callback,
-						NULL, NULL)) {
+						channel, l_free)) {
 		l_error("Getting all PHY devices failed");
 		return false;
 	}
