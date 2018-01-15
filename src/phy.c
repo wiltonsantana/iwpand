@@ -30,7 +30,7 @@
 #include "lowpan.h"
 #include "phy.h"
 
-#define PHY_INTERFACE		"net.connman.iwpand.Adapter"
+#define ADAPTER_INTERFACE		"net.connman.iwpand.Adapter"
 
 /* User defined settings */
 struct channel {
@@ -41,12 +41,19 @@ struct channel {
 struct phy {
 	uint32_t id;
 	char *name;
-	bool powered;
 	uint8_t page;
 	uint8_t channel;
 };
 
+struct wpan {
+	uint32_t id;
+	char *name;
+	bool powered;
+	uint16_t panid;
+};
+
 static struct l_queue *phy_list = NULL;
+static struct l_queue *wpan_list = NULL;
 static struct l_genl_family *nl802154 = NULL;
 
 static void phy_free(void *data)
@@ -57,26 +64,34 @@ static void phy_free(void *data)
 	l_free(phy);
 }
 
-static bool phy_property_get_powered(struct l_dbus *dbus,
+static void wpan_free(void *data)
+{
+	struct wpan *wpan = data;
+
+	l_free(wpan->name);
+	l_free(wpan);
+}
+
+static bool property_get_powered(struct l_dbus *dbus,
 				     struct l_dbus_message *msg,
 				     struct l_dbus_message_builder *builder,
 				     void *user_data)
 {
-	struct phy *phy = user_data;
+	struct wpan *wpan = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 'b', &phy->powered);
-	l_info("GetProperty(Powered = %d)", phy->powered);
+	l_dbus_message_builder_append_basic(builder, 'b', &wpan->powered);
+	l_info("GetProperty(Powered = %d)", wpan->powered);
 
 	return true;
 }
 
-static struct l_dbus_message *phy_property_set_powered(struct l_dbus *dbus,
+static struct l_dbus_message *property_set_powered(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_iter *new_value,
 					l_dbus_property_complete_cb_t complete,
 					void *user_data)
 {
-	struct phy *phy = user_data;
+	struct wpan *wpan = user_data;
 	bool value;
 
 	if (!l_dbus_message_iter_get_variant(new_value, "b", &value))
@@ -84,10 +99,10 @@ static struct l_dbus_message *phy_property_set_powered(struct l_dbus *dbus,
 
 	l_info("SetProperty(Powered = %d)", value);
 
-	if (value == phy->powered)
+	if (value == wpan->powered)
 		goto done;
 
-	phy->powered = value;
+	wpan->powered = value;
 
 	if (value == true)
 		lowpan_init();
@@ -100,98 +115,50 @@ done:
 	return NULL;
 }
 
-static bool phy_property_get_name(struct l_dbus *dbus,
+static bool property_get_name(struct l_dbus *dbus,
 				  struct l_dbus_message *msg,
 				  struct l_dbus_message_builder *builder,
 				  void *user_data)
 {
-	struct phy *phy = user_data;
+	struct wpan *wpan = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', phy->name);
-	l_info("GetProperty(Name = %s)", phy->name);
-
-	return true;
-}
-
-static bool phy_property_get_channel(struct l_dbus *dbus,
-				     struct l_dbus_message *msg,
-				     struct l_dbus_message_builder *builder,
-				     void *user_data)
-{
-	struct phy *phy = user_data;
-
-	l_dbus_message_builder_append_basic(builder, 'y', &phy->channel);
-	l_info("GetProperty(Channel = %d)", phy->channel);
+	l_dbus_message_builder_append_basic(builder, 's', wpan->name);
+	l_info("GetProperty(Name = %s)", wpan->name);
 
 	return true;
 }
 
-static struct l_dbus_message *phy_property_set_channel(struct l_dbus *dbus,
-					struct l_dbus_message *message,
-					struct l_dbus_message_iter *new_value,
-					l_dbus_property_complete_cb_t complete,
-					void *user_data)
-{
-	struct phy *phy = user_data;
-	struct l_genl_msg *msg;
-	uint8_t value;
-
-	if (!l_dbus_message_iter_get_variant(new_value, "y", &value))
-		return dbus_error_invalid_args(message);
-
-	l_info("SetProperty(Channel = %d)", value);
-
-	msg = l_genl_msg_new_sized(NL802154_CMD_SET_CHANNEL, 64);
-	l_genl_msg_append_attr(msg, NL802154_ATTR_WPAN_PHY,
-			       sizeof(phy->id), &phy->id);
-	l_genl_msg_append_attr(msg, NL802154_ATTR_PAGE, 1, &phy->page);
-	l_genl_msg_append_attr(msg, NL802154_ATTR_CHANNEL, 1, &value);
-
-	if (!l_genl_family_send(nl802154, msg, NULL, NULL, NULL)) {
-		l_error("NL802154_CMD_SET_CHANNEL failed");
-		return dbus_error_invalid_args(message);
-	}
-
-	phy->channel = value;
-	complete(dbus, message, NULL);
-
-	return NULL;
-}
-
-static void setup_phy_interface(struct l_dbus_interface *interface)
+static void register_property(struct l_dbus_interface *interface)
 {
 	if (!l_dbus_interface_property(interface, "Powered", 0, "b",
-				       phy_property_get_powered,
-				       phy_property_set_powered))
+				       property_get_powered,
+				       property_set_powered))
 		l_error("Can't add 'Powered' property");
 
 	if (!l_dbus_interface_property(interface, "Name", 0, "s",
-				       phy_property_get_name,
+				       property_get_name,
 				       NULL))
 		l_error("Can't add 'Name' property");
-
-	if (!l_dbus_interface_property(interface, "Channel", 0, "y",
-				       phy_property_get_channel,
-				       phy_property_set_channel))
-		l_error("Can't add 'Channel' property");
 }
 
-static void add_interface(struct phy *phy)
+static void add_interface(struct wpan *wpan)
 {
-	char *path = l_strdup_printf("/%s", phy->name);
+	char *path;
+
+	path = l_strdup_printf("/%s", wpan->name);
 
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 					 path,
-					 PHY_INTERFACE,
-					 phy))
+					 ADAPTER_INTERFACE,
+					 wpan))
 		l_error("'%s': Unable to register %s interface",
 							path,
-							PHY_INTERFACE);
+							ADAPTER_INTERFACE);
 
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 					 path,
 					 L_DBUS_INTERFACE_PROPERTIES,
-					 phy))
+					 wpan))
 		l_error("'%s': Unable to register %s interface",
 						path,
 						L_DBUS_INTERFACE_PROPERTIES);
@@ -214,8 +181,6 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 	phy = l_new(struct phy, 1);
 	l_queue_push_head(phy_list, phy);
 
-	phy->powered = false;
-
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		l_debug("type: %u len:%u", type, len);
 		switch (type) {
@@ -225,7 +190,6 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 			break;
 		case NL802154_ATTR_WPAN_PHY_NAME:
 			phy->name = l_strdup(data);
-			add_interface(phy);
 			l_debug("  name: %s", phy->name);
 			break;
 		case NL802154_ATTR_PAGE:
@@ -238,6 +202,41 @@ static void get_wpan_phy_callback(struct l_genl_msg *msg, void *user_data)
 			break;
 		}
 	}
+}
+
+static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct wpan *wpan;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	wpan = l_new(struct wpan, 1);
+	l_queue_push_head(wpan_list, wpan);
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		l_debug("type: %u len:%u", type, len);
+		switch (type) {
+		case NL802154_ATTR_WPAN_PHY:
+			wpan->id = *((uint32_t *) data);
+			l_debug("  id: %d",  wpan->id);
+			break;
+		case NL802154_ATTR_IFNAME:
+			wpan->name = l_strdup(data);
+			l_debug("  name: %s", wpan->name);
+			break;
+		case NL802154_ATTR_PAN_ID:
+			wpan->panid = *((uint16_t *) data);
+			l_debug("  PAN ID: %d", wpan->panid);
+		}
+	}
+
+	add_interface(wpan);
 }
 
 bool phy_init(struct l_genl_family *genl, uint8_t page, uint8_t ch)
@@ -256,15 +255,24 @@ bool phy_init(struct l_genl_family *genl, uint8_t page, uint8_t ch)
 		return false;
 	}
 
+	msg = l_genl_msg_new(NL802154_CMD_GET_INTERFACE);
+	if (!l_genl_family_dump(genl, msg, get_interface_callback,
+						NULL, NULL)) {
+		l_error("Getting all interfaces failed");
+		return false;
+	}
+
+
 	if (!l_dbus_register_interface(dbus_get_bus(),
-				       PHY_INTERFACE,
-				       setup_phy_interface,
+				       ADAPTER_INTERFACE,
+				       register_property,
 				       NULL, false)) {
-		l_error("Unable to register %s interface", PHY_INTERFACE);
+		l_error("Unable to register %s interface", ADAPTER_INTERFACE);
 		return false;
 	}
 
 	phy_list = l_queue_new();
+	wpan_list = l_queue_new();
 	nl802154 = genl;
 
 	return true;
@@ -273,4 +281,5 @@ bool phy_init(struct l_genl_family *genl, uint8_t page, uint8_t ch)
 void phy_exit(struct l_genl_family *genl)
 {
 	l_queue_destroy(phy_list, phy_free);
+	l_queue_destroy(wpan_list, wpan_free);
 }
