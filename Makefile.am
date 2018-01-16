@@ -1,5 +1,4 @@
 
-ACLOCAL_AMFLAGS = -I m4
 
 AM_MAKEFLAGS = --no-print-directory
 
@@ -71,13 +70,13 @@ ell/internal: Makefile
 	$(AM_V_at)$(MKDIR_P) ell
 	$(AM_V_GEN)for f in $(ell_sources) ; do \
 		if [ ! -f $$f ] ; then \
-			$(LN_S) -t ell -f $(abs_srcdir)/../ell.git/$$f ; \
+			$(LN_S) -t ell -f $(abs_srcdir)/../ell-master/$$f ; \
 		fi \
 	done > $@
 	$(AM_V_at)$(MKDIR_P) linux
 	$(AM_V_GEN)for f in $(ell_linux_headers) ; do \
 		if [ ! -f $$f ] ; then \
-			$(LN_S) -t linux -f $(abs_srcdir)/../ell.git/$$f ; \
+			$(LN_S) -t linux -f $(abs_srcdir)/../ell-master/$$f ; \
 		fi \
 	done > $@
 
